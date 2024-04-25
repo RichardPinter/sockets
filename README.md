@@ -1,0 +1,1 @@
+This repo is designated to use TCP sockets to create a server process that can store messages and allow them to be retrieved, and a client process that can be used to interact with the server.
