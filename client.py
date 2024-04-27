@@ -24,19 +24,22 @@ def login_logic(client_socket):
             print(f'Invalid username, {username} contains non-ascii characteser(s)')
         elif username == 'EXIT':
             print('You are exiting the program. Goodbye for.')
+            client_socket.send(('EXIT\n').encode()) 
             client_socket.close()
+            exit()
         else:
-            client_socket.send(('LOGIN ' + username).encode()) 
+            client_socket.send(('LOGIN ' + username +'\n').encode())
+            data = client_socket.recv(1024).decode()  # receive response
+            print(f'Number of unread messages: {data}') 
             break
-    data = client_socket.recv(1024).decode()  # receive response
-    print(f'Number of unread messages: {data}')
 
 def read_logic(answer):
     # Read messages logic
-    if answer == 'READ ERROR':
+    if answer == 'READ ERROR\n':
         print('No new messages')
     else:
         name, message = answer.split(' ', 1)
+        message = message.replace("\n", "")
         print(f'{name} left the following message for you: "{message}"')
     
 def compose_logic(client_socket, answer):
@@ -54,11 +57,10 @@ def compose_logic(client_socket, answer):
             print(f'Incorrect message, {message}, it contains non-ascii character(s).')
             return
         else:
-            client_socket.send(('COMPOSE ' + recipient).encode())
+            client_socket.send(('COMPOSE ' + recipient + '\n').encode())
             client_socket.send(message.encode())
             answer = client_socket.recv(1024).decode()
-        print(answer)
-        if answer == 'MESSAGE SENT':
+        if answer == 'MESSAGE SENT\n':
             print(f'Messaged delivered succesfully to {recipient}')
         else:
             print(f'An error occurred the message was not delived to {recipient}')
@@ -71,7 +73,7 @@ def communication_with_server(client_socket):
         if option == 'COMPOSE':
             compose_logic(client_socket, option)
         elif option == 'READ':
-            client_socket.send(option.encode())
+            client_socket.send((option + '\n').encode())
             answer = client_socket.recv(1024).decode()
             read_logic(answer)
         elif option == 'EXIT':
@@ -99,6 +101,6 @@ if __name__ == '__main__':
         print("Usage: python script.py <hostname> <port>")
         sys.exit(1) 
 
-    host = sys.argv[1]  #
+    host = sys.argv[1]
     port = int(sys.argv[2]) 
     client_program(host, port)

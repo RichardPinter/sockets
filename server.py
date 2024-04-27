@@ -7,8 +7,8 @@ def handle_client(conn, addr, users, lock):
     thread_data = threading.local()
     thread_data.composing = False
     thread_data.logged_in = False
-    
     while True:
+        
         data = conn.recv(1024).decode()
         if not data:
             break
@@ -23,17 +23,16 @@ def handle_client(conn, addr, users, lock):
             if thread_data.username not in users:
                 users[thread_data.username] = []
             lock.release()
-            conn.send(str(len(users[thread_data.username])).encode())
+            conn.send((str(len(users[thread_data.username])) + "\n").encode())
             thread_data.logged_in = True
             
+        ### Send message if COMPOSE <receiver> was already given
         if thread_data.composing:
-            print('hey')
             lock.acquire()
             users[thread_data.receiver].append((thread_data.username, data))
             lock.release()
             thread_data.composing = False
-            conn.send('MESSAGE SENT'.encode())
-        
+            
         ### COMPOSE LOGIC
         elif data.startswith('COMPOSE '):
             thread_data.receiver = data[len('COMPOSE '):].strip()
@@ -41,19 +40,24 @@ def handle_client(conn, addr, users, lock):
                 conn.close()
                 break
             lock.acquire()
-            if thread_data.receiver not in users:
-                users[thread_data.receiver] = []
-            lock.release()
-            thread_data.composing = True
+            try:
+                if thread_data.receiver not in users:
+                    users[thread_data.receiver] = []
+                conn.send('MESSAGE SENT\n'.encode())
+            except Exception as e:
+                conn.send('MESSAGE FAILED\n'.encode())
+            finally:
+                lock.release()
+                thread_data.composing = True    
         
         ### READ LOGIC
-        elif data == 'READ':
+        elif data.startswith('READ\n'):
             lock.acquire()
             if users[thread_data.username]:
                 sender, message = users[thread_data.username].pop(0)
-                conn.send((sender + ": " + message).encode())
+                conn.send((sender + " " + message + "\n").encode())
             else:
-                conn.send('No new messages.'.encode())
+                conn.send('READ ERROR\n'.encode())
             lock.release()
         
         ### EXIT LOGIC
@@ -61,9 +65,16 @@ def handle_client(conn, addr, users, lock):
             conn.close()
             break
 
+
+        ## BREAK CONNECTION IN ANY OTHER WAY
+        elif thread_data.logged_in and not thread_data.composing and not data.startswith('LOGIN ') and not data.startswith('READ\n') and not data.startswith('COMPOSE '):
+            if not thread_data.composing:
+                conn.close()
+                break
+            
+            
 def server_program(port):
     host = socket.gethostname()
-    print(host)
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((host, port))
